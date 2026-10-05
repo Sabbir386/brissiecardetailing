@@ -1,0 +1,16 @@
+{
+  "name": "silvas-detailing",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w @silvas/api\" \"npm run dev -w @silvas/web\"",
+    "db:up": "docker compose up -d",
+    "db:setup": "npm run db:push -w @silvas/api && npm run seed -w @silvas/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

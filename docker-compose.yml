@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: silvas
+      POSTGRES_PASSWORD: silvas
+      POSTGRES_DB: silvas
+    ports:
+      - "5433:5432"
+    volumes:
+      - silvas_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silvas -d silvas"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  silvas_pg:

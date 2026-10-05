@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id                   String  @id @default("main")
+  name                 String
+  phone                String
+  phoneTel             String
+  locationLine         String
+  timezone             String
+  instagramUrl         String?
+  facebookUrl          String?
+  cancellationPolicy   String
+  taxRateBps           Int     @default(0)
+}
+
+model WeeklyHour {
+  dayOfWeek Int     @id
+  openMin   Int
+  closeMin  Int
+  closed    Boolean @default(false)
+}
+
+model BlockedDate {
+  date   String  @id
+  reason String?
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  sortOrder Int
+  services  Service[]
+}
+
+model Service {
+  id              String          @id @default(cuid())
+  categoryId      String
+  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name            String
+  slug            String          @unique
+  summary         String
+  paragraphs      Json
+  bullets         Json
+  warnings        Json
+  photo           String
+  depositCents    Int
+  isAddon         Boolean         @default(false)
+  requiresDropoff Boolean         @default(false)
+  sortOrder       Int
+  options         ServiceOption[]
+}
+
+model ServiceOption {
+  id              String  @id @default(cuid())
+  serviceId       String
+  service         Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  name            String
+  priceCents      Int
+  durationMinutes Int
+  priceOnRequest  Boolean @default(false)
+  sortOrder       Int
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  phone     String    @unique
+  firstName String?
+  lastName  String?
+  email     String?
+  bookings  Booking[]
+  sessions  Session[]
+}
+
+model SmsCode {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  sessions     Session[]
+}
+
+model Session {
+  id         String     @id @default(cuid())
+  tokenHash  String     @unique
+  kind       String
+  customerId String?
+  customer   Customer?  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  adminId    String?
+  admin      AdminUser? @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime   @default(now())
+}
+
+model Hold {
+  id        String   @id @default(cuid())
+  startAt   DateTime
+  endAt     DateTime
+  expiresAt DateTime
+  items     Json
+  quote     Json
+  released  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  token           String        @unique
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  holdId          String?
+  startAt         DateTime
+  endAt           DateTime
+  addressLine1    String
+  addressLine2    String?
+  city            String
+  state           String
+  zip             String
+  note            String?
+  subtotalCents   Int
+  taxCents        Int
+  totalCents      Int
+  depositCents    Int
+  balanceCents    Int?
+  priceOnRequest  Boolean       @default(false)
+  stripePaymentIntentId String?
+  devPayment      Boolean       @default(false)
+  cardSaved       Boolean       @default(false)
+  policyAccepted  Boolean
+  status          String
+  createdAt       DateTime      @default(now())
+  items           BookingItem[]
+}
+
+model BookingItem {
+  id              String  @id @default(cuid())
+  bookingId       String
+  booking         Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  serviceId       String
+  serviceName     String
+  optionId        String
+  optionName      String
+  priceCents      Int
+  durationMinutes Int
+  isAddon         Boolean
+  requiresDropoff Boolean
+  priceOnRequest  Boolean
+  depositCents    Int
+}
