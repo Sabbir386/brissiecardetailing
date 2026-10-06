@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clientSend } from "@/lib/api";
 import { countries } from "@/lib/format";
-import { BrandLogo } from "@/components/logo";
 
 export function SignInForm() {
   const router = useRouter();
@@ -78,7 +77,6 @@ export function SignInForm() {
   return (
     <div className="page signin-page">
       <div className="center-card">
-        <BrandLogo href={null} size={72} stacked />
         <h1>Sign in</h1>
         <p className="note">
           Use your mobile number to see appointments you’ve already booked. New customers can book without signing in.

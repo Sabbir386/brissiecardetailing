@@ -2224,6 +2224,11 @@ html.book-mode body,
 .signin-page .center-card {
   width: min(460px, 100%);
   margin: 0;
+  text-align: center;
+}
+.signin-page .center-card .field,
+.signin-page .center-card form {
+  text-align: left;
 }
 .center-card h1 { font-family: var(--display); font-weight: 540; letter-spacing: -0.03em; margin-top: 0; }
 .signin-otp {
@@ -2763,12 +2768,6 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
   .signin-page .center-card .note {
     text-align: center;
   }
-  .signin-page .center-card .logo-mark {
-    width: 56px !important;
-    height: 56px !important;
-    border-radius: 16px;
-  }
-  .signin-page .brand.stacked { gap: 10px; }
   .signin-phone { grid-template-columns: max-content minmax(0, 1fr); }
   .signin-otp { padding: 14px 10px 12px; }
   .signin-otp-digits {
