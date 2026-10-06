@@ -1165,9 +1165,9 @@ a.drawer-item {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-width: 86px;
-  padding: 0 8px 0 18px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 28px 0 16px;
   color: var(--ink);
 }
 .text-country select {
@@ -1191,6 +1191,12 @@ a.drawer-item {
   pointer-events: none;
 }
 .text-country svg {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 12px;
+  height: 8px;
+  transform: translateY(-50%);
   display: block;
   opacity: 0.88;
   pointer-events: none;
@@ -1773,7 +1779,7 @@ html.book-mode body,
 .co-signin:hover { text-decoration: underline; }
 .co-phone {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   margin: 0 0 10px;
   border: 1px solid #d0d5dd;
   border-radius: 8px;
@@ -1784,20 +1790,42 @@ html.book-mode body,
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  box-sizing: border-box;
   min-height: 46px;
-  padding: 0 12px;
+  padding: 0 28px 0 12px;
   border-right: 1px solid #e6e9ee;
   color: #111;
   font-size: 14px;
   font-weight: 650;
+  white-space: nowrap;
+  line-height: 1;
+}
+.co-dial > span {
+  pointer-events: none;
+}
+.co-dial svg {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 10px;
+  height: 6px;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 .co-dial select {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
   opacity: 0;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: none;
+  font-size: 16px;
 }
 .co-phone input {
   margin: 0 !important;
@@ -2251,6 +2279,66 @@ html.book-mode body,
   min-height: 46px;
   padding: 10px 12px;
 }
+.field select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75L6 6.25l4.5-4.5' fill='none' stroke='%235f5a53' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 8px;
+  padding-right: 36px;
+}
+.signin-phone {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+.signin-dial {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 34px 0 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 12px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  line-height: 1;
+}
+.signin-dial > span {
+  pointer-events: none;
+}
+.signin-dial select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: none;
+  font-size: 16px;
+}
+.signin-dial svg {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  width: 12px;
+  height: 8px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #5f5a53;
+}
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .row-3 { display: grid; grid-template-columns: 1.4fr 0.8fr 0.7fr; gap: 10px; }
 .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; margin: 12px 0; }
@@ -2640,7 +2728,7 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
   .checkout-summary { position: static; }
   .appt-head { flex-direction: column; align-items: flex-start; }
   .appt-head h1 { font-size: 30px; }
-  .co-phone { grid-template-columns: 92px 1fr; }
+  .co-phone { grid-template-columns: max-content minmax(0, 1fr); }
   .co-cardbox { grid-template-columns: 22px 1fr 64px 48px; }
   .row-3 { grid-template-columns: 1fr; }
   .center-card {
@@ -2661,7 +2749,7 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
     border-radius: 16px;
   }
   .signin-page .brand.stacked { gap: 10px; }
-  .signin-phone { grid-template-columns: 1fr; }
+  .signin-phone { grid-template-columns: max-content minmax(0, 1fr); }
   .signin-otp { padding: 14px 10px 12px; }
   .signin-otp-digits {
     gap: 5px;

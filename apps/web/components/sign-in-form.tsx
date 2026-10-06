@@ -11,7 +11,8 @@ export function SignInForm() {
   const params = useSearchParams();
   const next = params.get("next") || "/account";
   const [countryName, setCountryName] = useState("Australia");
-  const dial = countries.find((country) => country.name === countryName)?.dial || "+61";
+  const country = countries.find((item) => item.name === countryName) || countries[0];
+  const dial = country.dial;
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
@@ -83,16 +84,22 @@ export function SignInForm() {
           Use your mobile number to see appointments you’ve already booked. New customers can book without signing in.
         </p>
         <form onSubmit={sent ? verify : requestCode}>
-          <div className="row-2 signin-phone">
+          <div className="signin-phone">
             <label className="field">
               Country
-              <select value={countryName} onChange={(event) => setCountryName(event.target.value)}>
-                {countries.map((country) => (
-                  <option key={country.name} value={country.name}>
-                    {country.name} {country.dial}
-                  </option>
-                ))}
-              </select>
+              <span className="signin-dial">
+                <span>
+                  {country.code} {country.dial}
+                </span>
+                <ChevronDown />
+                <select value={countryName} onChange={(event) => setCountryName(event.target.value)} aria-label="Country">
+                  {countries.map((item) => (
+                    <option key={item.name} value={item.name}>
+                      {item.name} {item.dial}
+                    </option>
+                  ))}
+                </select>
+              </span>
             </label>
             <label className="field">
               Mobile number
@@ -139,5 +146,13 @@ export function SignInForm() {
       ) : null}
       </div>
     </div>
+  );
+}
+
+function ChevronDown() {
+  return (
+    <svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true">
+      <path d="M1.5 1.75L6 6.25l4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
