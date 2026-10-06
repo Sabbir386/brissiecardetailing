@@ -2209,14 +2209,21 @@ html.book-mode body,
   padding: 32px 28px;
   box-shadow: var(--shadow);
 }
-.signin-page {
-  width: min(520px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 8px 0 110px;
+.page.signin-page {
+  width: 100%;
+  max-width: none;
+  min-height: calc(100dvh - 92px);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 16px 96px;
+  box-sizing: border-box;
 }
 .signin-page .center-card {
-  width: 100%;
-  margin: 12px auto 0;
+  width: min(460px, 100%);
+  margin: 0;
 }
 .center-card h1 { font-family: var(--display); font-weight: 540; letter-spacing: -0.03em; margin-top: 0; }
 .signin-otp {
@@ -2742,6 +2749,19 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
     font-weight: 750;
     letter-spacing: -0.03em;
     margin-bottom: 8px;
+  }
+  .page.signin-page {
+    width: 100%;
+    min-height: calc(100dvh - 84px);
+    padding: 12px 16px 80px;
+  }
+  .signin-page .center-card {
+    width: min(460px, 100%);
+    margin: 0;
+  }
+  .signin-page .center-card h1,
+  .signin-page .center-card .note {
+    text-align: center;
   }
   .signin-page .center-card .logo-mark {
     width: 56px !important;
