@@ -33,6 +33,7 @@ export function Shell({ business, children }: { business: Business; children: Re
   const [menu, setMenu] = useState(false);
   const [textUs, setTextUs] = useState(false);
   const [cookies, setCookies] = useState<"unknown" | "accepted" | "rejected">("unknown");
+  const [cookieReady, setCookieReady] = useState(false);
   const [customer, setCustomer] = useState<MenuCustomer | null>(null);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   const [adminTab, setAdminTab] = useState("today");
@@ -41,6 +42,7 @@ export function Shell({ business, children }: { business: Business; children: Re
     const stored = localStorage.getItem("brissie-cookies");
     if (stored === "accepted" || stored === "rejected") setCookies(stored);
     else setCookies("unknown");
+    setCookieReady(true);
     if (shopDesk) {
       setCustomer(null);
       return;
@@ -153,7 +155,7 @@ export function Shell({ business, children }: { business: Business; children: Re
           <span className="text-us-label">Text us</span>
         </button>
       )}
-      {cookies === "unknown" && !quiet && !shopDesk ? (
+      {cookieReady && cookies === "unknown" && !quiet && !shopDesk ? (
         <aside className="cookie">
           <strong>Cookie preferences</strong>
           <p className="note">Analytics stay off until you accept. Booking works either way.</p>
