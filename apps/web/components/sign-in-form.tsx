@@ -75,27 +75,30 @@ export function SignInForm() {
   }
 
   return (
-    <div className="center-card">
-      <BrandLogo href={null} size={88} stacked />
-      <h1>Sign in to brissiecardetailing</h1>
-      <p className="note">New customers can book without signing in. Use your mobile number here to see appointments you’ve already booked.</p>
-      <form onSubmit={sent ? verify : requestCode}>
-        <div className="row-2">
-          <label className="field">
-            Country
-            <select value={countryName} onChange={(event) => setCountryName(event.target.value)}>
-              {countries.map((country) => (
-                <option key={country.name} value={country.name}>
-                  {country.name} {country.dial}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Mobile number
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} required inputMode="tel" />
-          </label>
-        </div>
+    <div className="page signin-page">
+      <div className="center-card">
+        <BrandLogo href={null} size={72} stacked />
+        <h1>Sign in</h1>
+        <p className="note">
+          Use your mobile number to see appointments you’ve already booked. New customers can book without signing in.
+        </p>
+        <form onSubmit={sent ? verify : requestCode}>
+          <div className="row-2 signin-phone">
+            <label className="field">
+              Country
+              <select value={countryName} onChange={(event) => setCountryName(event.target.value)}>
+                {countries.map((country) => (
+                  <option key={country.name} value={country.name}>
+                    {country.name} {country.dial}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Mobile number
+              <input value={phone} onChange={(event) => setPhone(event.target.value)} required inputMode="tel" autoComplete="tel" />
+            </label>
+          </div>
         {onScreenCode ? (
           <div className="signin-otp">
             <p className="signin-otp-kicker">Your sign-in code</p>
@@ -134,6 +137,7 @@ export function SignInForm() {
           {wait > 0 ? `Resend in ${wait}s` : "Resend code"}
         </button>
       ) : null}
+      </div>
     </div>
   );
 }
