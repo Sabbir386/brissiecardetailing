@@ -60,7 +60,7 @@ export function ServiceDetail({ service }: { service: Service }) {
       <div className="detail">
         <article>
           <h1>{service.name}</h1>
-          <p className="meta">{service.priceLine}</p>
+          <p className="meta">{service.priceLine.replace(" · ", " • ")}</p>
           {intro ? <p className="lede">{intro}</p> : null}
 
           {groups.map((group) => (
