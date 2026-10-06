@@ -491,6 +491,43 @@ app.get(
   }),
 );
 
+app.put(
+  "/admin/account",
+  asyncRoute(async (req, res) => {
+    const admin = await requireAdmin(req);
+    const body = z
+      .object({
+        email: z.string().trim().email().optional(),
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(8).max(80).optional().or(z.literal("")),
+      })
+      .parse(req.body);
+    const row = await prisma.adminUser.findUnique({ where: { id: admin.id } });
+    if (!row || !(await checkPassword(body.currentPassword, row.passwordHash))) {
+      throw new HttpError(401, "Current password is incorrect.");
+    }
+    const nextEmail = body.email ? body.email.toLowerCase() : row.email;
+    const nextPassword = body.newPassword || "";
+    if (nextEmail === row.email && !nextPassword) {
+      throw new HttpError(400, "Enter a new email or a new password to update.");
+    }
+    if (nextEmail !== row.email) {
+      const taken = await prisma.adminUser.findUnique({ where: { email: nextEmail } });
+      if (taken && taken.id !== row.id) {
+        throw new HttpError(409, "That email is already in use.");
+      }
+    }
+    const updated = await prisma.adminUser.update({
+      where: { id: row.id },
+      data: {
+        email: nextEmail,
+        ...(nextPassword ? { passwordHash: await hashPassword(nextPassword) } : {}),
+      },
+    });
+    res.json({ email: updated.email });
+  }),
+);
+
 app.get(
   "/admin/overview",
   asyncRoute(async (req, res) => {

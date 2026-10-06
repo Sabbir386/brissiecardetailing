@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCart } from "@/lib/cart";
 import { clientSend } from "@/lib/api";
@@ -13,8 +13,20 @@ import type { Business } from "@/lib/types";
 
 type MenuCustomer = { firstName: string | null; lastName: string | null; phone: string };
 
+const adminNav: { tab: string; href: string; label: string; hint: string }[] = [
+  { tab: "today", href: "/admin", label: "Today", hint: "Jobs on the book" },
+  { tab: "jobs", href: "/admin?tab=jobs", label: "Jobs", hint: "All bookings" },
+  { tab: "clients", href: "/admin?tab=clients", label: "Clients", hint: "Customer list" },
+  { tab: "inbox", href: "/admin?tab=inbox", label: "Inbox", hint: "Customer texts" },
+  { tab: "menu", href: "/admin?tab=menu", label: "Menu", hint: "Services and prices" },
+  { tab: "hours", href: "/admin?tab=hours", label: "Hours", hint: "Opening times" },
+  { tab: "shop", href: "/admin?tab=shop", label: "Shop", hint: "Business details" },
+  { tab: "settings", href: "/admin?tab=settings", label: "Settings", hint: "Email and password" },
+];
+
 export function Shell({ business, children }: { business: Business; children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const shopDesk = pathname.startsWith("/admin");
   const quiet = pathname === "/book" || pathname === "/checkout";
   const hideTextUs = pathname === "/checkout" || shopDesk;
@@ -22,15 +34,37 @@ export function Shell({ business, children }: { business: Business; children: Re
   const [textUs, setTextUs] = useState(false);
   const [cookies, setCookies] = useState<"unknown" | "accepted" | "rejected">("unknown");
   const [customer, setCustomer] = useState<MenuCustomer | null>(null);
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+  const [adminTab, setAdminTab] = useState("today");
 
   useEffect(() => {
     const stored = localStorage.getItem("brissie-cookies");
     if (stored === "accepted" || stored === "rejected") setCookies(stored);
     else setCookies("unknown");
+    if (shopDesk) {
+      setCustomer(null);
+      return;
+    }
     clientSend<{ customer: MenuCustomer | null }>("/auth/me")
       .then((data) => setCustomer(data.customer))
       .catch(() => setCustomer(null));
-  }, [pathname]);
+  }, [pathname, shopDesk]);
+
+  useEffect(() => {
+    if (!shopDesk) {
+      setAdminEmail(null);
+      return;
+    }
+    function refreshAdmin() {
+      clientSend<{ admin: { email: string } | null }>("/admin/me")
+        .then((data) => setAdminEmail(data.admin?.email ?? null))
+        .catch(() => setAdminEmail(null));
+      setAdminTab(new URLSearchParams(window.location.search).get("tab") || "today");
+    }
+    refreshAdmin();
+    window.addEventListener("brissie-admin", refreshAdmin);
+    return () => window.removeEventListener("brissie-admin", refreshAdmin);
+  }, [shopDesk, pathname, menu]);
 
   useEffect(() => {
     setMenu(false);
@@ -75,6 +109,26 @@ export function Shell({ business, children }: { business: Business; children: Re
     setCustomer(null);
     setMenu(false);
     window.location.assign("/");
+  }
+
+  async function adminSignOut() {
+    try {
+      await clientSend("/admin/logout", { method: "POST" });
+    } catch {
+      /* still leave the local session */
+    }
+    setAdminEmail(null);
+    setMenu(false);
+    window.dispatchEvent(new Event("brissie-admin"));
+    window.location.assign("/admin");
+  }
+
+  function go(href: string) {
+    if (href.startsWith("/admin")) {
+      setAdminTab(new URL(href, window.location.origin).searchParams.get("tab") || "today");
+    }
+    router.push(href);
+    setMenu(false);
   }
 
   return (
@@ -123,101 +177,176 @@ export function Shell({ business, children }: { business: Business; children: Re
                 <CloseIcon />
               </button>
             </div>
-            <div className="drawer-body">
-              <div className="drawer-item static">
-                <span className="drawer-copy">
-                  <span>Location</span>
-                  <strong>{business.locationLine}</strong>
-                </span>
-              </div>
-              <a className="drawer-item" href={`tel:${business.phoneTel}`}>
-                <span className="drawer-copy">
-                  <span>Phone</span>
-                  <strong>{business.phone}</strong>
-                </span>
-                <span className="round-action" aria-hidden="true">
-                  <PhoneIcon />
-                </span>
-              </a>
-              <Hours business={business} />
-              <div className="drawer-item static">
-                <span className="drawer-copy">
-                  <span>Follow</span>
-                </span>
-                <span className="socials">
-                  <a
-                    href={business.instagramUrl || "https://www.instagram.com/brissiecardetailing"}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Instagram"
-                    className="round-action"
-                  >
-                    <InstagramIcon />
-                  </a>
-                  <a
-                    href={business.facebookUrl || "https://www.facebook.com/brissiecardetailing"}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Facebook"
-                    className="round-action"
-                  >
-                    <FacebookIcon />
-                  </a>
-                </span>
-              </div>
-              <button
-                type="button"
-                className="drawer-item"
-                onClick={() => {
-                  setMenu(false);
-                  setTextUs(true);
-                }}
-              >
-                <span className="drawer-copy">
-                  <span>Text us</span>
-                  <strong>We’ll reply as soon as we can</strong>
-                </span>
-                <span className="round-action" aria-hidden="true">
-                  <MessageIcon />
-                </span>
-              </button>
-            </div>
-            <div className="drawer-foot">
-              {customer ? (
-                <div className="drawer-account">
-                  <div className="drawer-account-row">
-                    <span className="drawer-avatar" aria-hidden="true">
-                      <UserIcon />
-                    </span>
-                    <span className="drawer-account-copy">
-                      <strong>{customer.firstName ? `Hi, ${customer.firstName}` : "You're signed in"}</strong>
-                      <em>{formatPhoneDisplay(customer.phone)}</em>
+            {shopDesk ? (
+              <>
+                <div className="drawer-body">
+                  {adminEmail
+                    ? adminNav.map((item) => (
+                        <Link
+                          key={item.tab}
+                          className={adminTab === item.tab ? "drawer-item compact on" : "drawer-item compact"}
+                          href={item.href}
+                          aria-current={adminTab === item.tab ? "page" : undefined}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            go(item.href);
+                          }}
+                        >
+                          <span className="drawer-copy">
+                            <span>{item.label}</span>
+                            <strong>{item.hint}</strong>
+                          </span>
+                        </Link>
+                      ))
+                    : (
+                        <Link
+                          className="drawer-item"
+                          href="/"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            go("/");
+                          }}
+                        >
+                          <span className="drawer-copy">
+                            <span>Website</span>
+                            <strong>View the public site</strong>
+                          </span>
+                        </Link>
+                      )}
+                </div>
+                <div className="drawer-foot">
+                  {adminEmail ? (
+                    <div className="drawer-account">
+                      <div className="drawer-account-row">
+                        <span className="drawer-avatar" aria-hidden="true">
+                          <UserIcon />
+                        </span>
+                        <span className="drawer-account-copy">
+                          <strong>Website admin</strong>
+                          <em>{adminEmail}</em>
+                        </span>
+                      </div>
+                      <Link className="btn secondary" href="/" onClick={() => setMenu(false)}>
+                        View website
+                      </Link>
+                      <button className="drawer-logout" type="button" onClick={adminSignOut}>
+                        Sign out
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="drawer-account guest">
+                      <div className="drawer-account-row">
+                        <span className="drawer-avatar" aria-hidden="true">
+                          <UserIcon />
+                        </span>
+                        <span className="drawer-account-copy">
+                          <strong>Admin sign in</strong>
+                          <em>Use your email and password on this page to manage the website.</em>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="drawer-body">
+                  <div className="drawer-item static">
+                    <span className="drawer-copy">
+                      <span>Location</span>
+                      <strong>{business.locationLine}</strong>
                     </span>
                   </div>
-                  <Link className="btn" href="/account" onClick={() => setMenu(false)}>
-                    Your appointments
-                  </Link>
-                  <button className="drawer-logout" type="button" onClick={signOut}>
-                    Sign out
+                  <a className="drawer-item" href={`tel:${business.phoneTel}`}>
+                    <span className="drawer-copy">
+                      <span>Phone</span>
+                      <strong>{business.phone}</strong>
+                    </span>
+                    <span className="round-action" aria-hidden="true">
+                      <PhoneIcon />
+                    </span>
+                  </a>
+                  <Hours business={business} />
+                  <div className="drawer-item static">
+                    <span className="drawer-copy">
+                      <span>Follow</span>
+                    </span>
+                    <span className="socials">
+                      <a
+                        href={business.instagramUrl || "https://www.instagram.com/brissiecardetailing"}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="Instagram"
+                        className="round-action"
+                      >
+                        <InstagramIcon />
+                      </a>
+                      <a
+                        href={business.facebookUrl || "https://www.facebook.com/brissiecardetailing"}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="Facebook"
+                        className="round-action"
+                      >
+                        <FacebookIcon />
+                      </a>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="drawer-item"
+                    onClick={() => {
+                      setMenu(false);
+                      setTextUs(true);
+                    }}
+                  >
+                    <span className="drawer-copy">
+                      <span>Text us</span>
+                      <strong>We’ll reply as soon as we can</strong>
+                    </span>
+                    <span className="round-action" aria-hidden="true">
+                      <MessageIcon />
+                    </span>
                   </button>
                 </div>
-              ) : (
-                <div className="drawer-account guest">
-                  <div className="drawer-account-row">
-                    <span className="drawer-avatar" aria-hidden="true">
-                      <UserIcon />
-                    </span>
-                    <span className="drawer-account-copy">
-                      <strong>Welcome</strong>
-                      <em>Book without an account, or sign in to see your bookings.</em>
-                    </span>
-                  </div>
-                  <Link className="btn" href="/sign-in" onClick={() => setMenu(false)}>
-                    Sign in
-                  </Link>
+                <div className="drawer-foot">
+                  {customer ? (
+                    <div className="drawer-account">
+                      <div className="drawer-account-row">
+                        <span className="drawer-avatar" aria-hidden="true">
+                          <UserIcon />
+                        </span>
+                        <span className="drawer-account-copy">
+                          <strong>{customer.firstName ? `Hi, ${customer.firstName}` : "You're signed in"}</strong>
+                          <em>{formatPhoneDisplay(customer.phone)}</em>
+                        </span>
+                      </div>
+                      <Link className="btn" href="/account" onClick={() => setMenu(false)}>
+                        Your appointments
+                      </Link>
+                      <button className="drawer-logout" type="button" onClick={signOut}>
+                        Sign out
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="drawer-account guest">
+                      <div className="drawer-account-row">
+                        <span className="drawer-avatar" aria-hidden="true">
+                          <UserIcon />
+                        </span>
+                        <span className="drawer-account-copy">
+                          <strong>Welcome</strong>
+                          <em>Book without an account, or sign in to see your bookings.</em>
+                        </span>
+                      </div>
+                      <Link className="btn" href="/sign-in" onClick={() => setMenu(false)}>
+                        Sign in
+                      </Link>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </aside>
         </>
       ) : null}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AdminPanel } from "@/components/admin-panel";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function AdminPage() {
-  return <AdminPanel />;
+  return (
+    <Suspense fallback={<div className="page shop-page">Loading the website desk…</div>}>
+      <AdminPanel />
+    </Suspense>
+  );
 }

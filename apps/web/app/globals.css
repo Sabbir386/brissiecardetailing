@@ -351,6 +351,21 @@ img { max-width: 100%; display: block; }
   outline: none;
 }
 .drawer-item:active { transform: scale(0.99); }
+a.drawer-item {
+  text-decoration: none;
+  color: inherit;
+}
+.drawer-item.on {
+  border-color: #f0c45a;
+  background: #fff8ea;
+  box-shadow: 0 8px 20px rgba(20, 19, 17, 0.06);
+}
+.drawer-item.compact {
+  padding: 12px 14px;
+  margin-bottom: 6px;
+}
+.drawer-item.compact .drawer-copy > span { font-size: 15px; }
+.drawer-item.compact .drawer-copy > strong { font-size: 13px; }
 .drawer-item.hours.open { align-items: flex-start; }
 .drawer-item.hours.open .round-action { margin-top: 2px; }
 .drawer-copy {
@@ -3105,6 +3120,8 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
   .shop-page { width: min(1120px, calc(100% - 20px)); padding-bottom: 36px; }
   .shop-top { flex-direction: column; align-items: flex-start; }
   .shop-top h1 { font-size: 30px; }
+  .shop-signout { display: none; }
+  .shop-login h1 { font-size: 26px; }
   .shop-stats { grid-template-columns: 1fr 1fr; }
   .shop-stat strong { font-size: 22px; }
   .shop-job {

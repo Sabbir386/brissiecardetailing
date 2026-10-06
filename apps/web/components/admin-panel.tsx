@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { clientSend } from "@/lib/api";
 import { formatPhoneDisplay, money, vehicleLabel } from "@/lib/format";
 import type { Booking, Service } from "@/lib/types";
 
-type Tab = "today" | "jobs" | "clients" | "inbox" | "menu" | "hours" | "shop";
+type Tab = "today" | "jobs" | "clients" | "inbox" | "menu" | "hours" | "shop" | "settings";
 type JobFilter = "all" | "today" | "upcoming" | "due" | "done" | "cancelled";
+const tabIds: Tab[] = ["today", "jobs", "clients", "inbox", "menu", "hours", "shop", "settings"];
 
 type AdminBooking = Booking;
 
@@ -54,21 +56,37 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "menu", label: "Menu" },
   { id: "hours", label: "Hours" },
   { id: "shop", label: "Shop" },
+  { id: "settings", label: "Settings" },
 ];
 
+function asTab(value: string | null): Tab {
+  return tabIds.includes(value as Tab) ? (value as Tab) : "today";
+}
+
+function notifyAdminSession() {
+  window.dispatchEvent(new Event("brissie-admin"));
+}
+
 export function AdminPanel() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tab = asTab(searchParams.get("tab"));
   const [admin, setAdmin] = useState<string | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<Tab>("today");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+
+  function setTab(next: Tab) {
+    router.replace(next === "today" ? "/admin" : `/admin?tab=${next}`, { scroll: false });
+  }
 
   async function load() {
     const me = await clientSend<{ admin: { email: string } | null }>("/admin/me");
     setAdmin(me.admin?.email ?? null);
     if (me.admin) setOverview(await clientSend<Overview>("/admin/overview"));
+    notifyAdminSession();
   }
 
   useEffect(() => {
@@ -97,14 +115,23 @@ export function AdminPanel() {
     }
   }
 
-  if (!mounted) return <div className="page shop-page">Loading the shop desk…</div>;
+  async function signOut() {
+    await clientSend("/admin/logout", { method: "POST" });
+    setAdmin(null);
+    setOverview(null);
+    notifyAdminSession();
+  }
+
+  if (!mounted) return <div className="page shop-page">Loading the website desk…</div>;
 
   if (!admin) {
     return (
       <form className="shop-login" onSubmit={login}>
-        <p className="shop-kicker">Shop desk</p>
-        <h1>Sign in to run the day</h1>
-        <p className="shop-login-copy">See bookings, collect remaining balances, and keep hours and prices up to date.</p>
+        <p className="shop-kicker">Website admin</p>
+        <h1>Sign in to brissiecardetailing</h1>
+        <p className="shop-login-copy">
+          Use your admin email and password to manage bookings, the service menu, hours, and customer messages.
+        </p>
         <label className="field">
           Email
           <input name="email" type="email" defaultValue="admin@brissiecardetailing.local" autoComplete="username" required />
@@ -115,13 +142,13 @@ export function AdminPanel() {
         </label>
         {error ? <p className="error">{error}</p> : null}
         <button className="btn next-cta" type="submit" disabled={busy}>
-          {busy ? "Signing in…" : "Enter shop"}
+          {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
     );
   }
 
-  if (!overview) return <div className="page shop-page">Loading the shop desk…</div>;
+  if (!overview) return <div className="page shop-page">Loading the website desk…</div>;
 
   const selected = overview.bookings.find((booking) => booking.id === selectedId) || null;
 
@@ -129,19 +156,11 @@ export function AdminPanel() {
     <div className="page shop-page">
       <header className="shop-top">
         <div>
-          <p className="shop-kicker">Shop desk</p>
+          <p className="shop-kicker">Website admin</p>
           <h1>Today’s work</h1>
           <p className="shop-signed">{admin}</p>
         </div>
-        <button
-          className="btn slim secondary"
-          type="button"
-          onClick={async () => {
-            await clientSend("/admin/logout", { method: "POST" });
-            setAdmin(null);
-            setOverview(null);
-          }}
-        >
+        <button className="btn slim secondary shop-signout" type="button" onClick={signOut}>
           Sign out
         </button>
       </header>
@@ -193,6 +212,7 @@ export function AdminPanel() {
         </div>
       ) : null}
       {tab === "shop" ? <ShopEditor business={overview.business} onSaved={load} /> : null}
+      {tab === "settings" ? <AccountSettings email={admin} onSaved={load} /> : null}
 
       {selected ? (
         <JobSheet
@@ -965,6 +985,78 @@ function ShopEditor({ business, onSaved }: { business: Overview["business"]; onS
       </label>
       <button className="btn slim" type="button" disabled={busy} onClick={save}>
         {busy ? "Saving…" : "Save shop"}
+      </button>
+      {message ? <p className="note">{message}</p> : null}
+    </section>
+  );
+}
+
+function AccountSettings({ email, onSaved }: { email: string; onSaved: () => Promise<void> }) {
+  const [nextEmail, setNextEmail] = useState(email);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setNextEmail(email);
+  }, [email]);
+
+  async function save() {
+    setMessage("");
+    if (newPassword && newPassword !== confirmPassword) {
+      setMessage("New password and confirmation do not match.");
+      return;
+    }
+    if (newPassword && newPassword.length < 8) {
+      setMessage("New password must be at least 8 characters.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await clientSend("/admin/account", {
+        method: "PUT",
+        body: JSON.stringify({
+          email: nextEmail,
+          currentPassword,
+          newPassword,
+        }),
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setMessage("Admin email and password saved.");
+      await onSaved();
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Could not update account.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="shop-card">
+      <h2>Admin settings</h2>
+      <p className="note">Change the email and password used to sign in to this website desk. Current password is required.</p>
+      <label className="field">
+        Admin email
+        <input type="email" value={nextEmail} autoComplete="username" onChange={(event) => setNextEmail(event.target.value)} />
+      </label>
+      <label className="field">
+        Current password
+        <input type="password" value={currentPassword} autoComplete="current-password" onChange={(event) => setCurrentPassword(event.target.value)} />
+      </label>
+      <label className="field">
+        New password
+        <input type="password" value={newPassword} autoComplete="new-password" placeholder="Leave blank to keep the current password" onChange={(event) => setNewPassword(event.target.value)} />
+      </label>
+      <label className="field">
+        Confirm new password
+        <input type="password" value={confirmPassword} autoComplete="new-password" onChange={(event) => setConfirmPassword(event.target.value)} />
+      </label>
+      <button className="btn slim" type="button" disabled={busy || !currentPassword} onClick={save}>
+        {busy ? "Saving…" : "Save account"}
       </button>
       {message ? <p className="note">{message}</p> : null}
     </section>
