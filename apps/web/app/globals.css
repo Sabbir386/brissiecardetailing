@@ -2494,18 +2494,30 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
     border: 1px solid #e6e1d8;
     border-radius: 16px;
   }
-  .dock.open .text-us { display: none; }
   .text-us {
     bottom: 20px;
     right: 16px;
-    z-index: 26;
+    z-index: 16;
     padding: 6px 14px 6px 6px;
   }
   .text-us-icon { width: 34px; height: 34px; }
   .page { width: min(1120px, calc(100% - 28px)); max-width: 100%; padding-bottom: 110px; }
-  body:has(.dock) .text-us { bottom: 84px; }
+  body:has(.dock) .text-us {
+    left: 16px;
+    right: auto;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+  body:has(.dock.open) .text-us {
+    display: none;
+  }
   body:has(.tab-more-sheet) .dock { display: none; }
-  body:has(.tab-more-sheet) .text-us { bottom: 20px; }
+  body:has(.tab-more-sheet) .text-us {
+    display: inline-flex;
+    left: auto;
+    right: 16px;
+    bottom: 20px;
+    z-index: 26;
+  }
   .tabs {
     top: 64px;
     gap: 18px;
