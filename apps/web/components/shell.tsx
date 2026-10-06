@@ -15,8 +15,9 @@ type MenuCustomer = { firstName: string | null; lastName: string | null; phone: 
 
 export function Shell({ business, children }: { business: Business; children: React.ReactNode }) {
   const pathname = usePathname();
-  const quiet = pathname === "/book" || pathname === "/checkout";
   const shopDesk = pathname.startsWith("/admin");
+  const quiet = pathname === "/book" || pathname === "/checkout";
+  const hideTextUs = pathname === "/checkout" || shopDesk;
   const [menu, setMenu] = useState(false);
   const [textUs, setTextUs] = useState(false);
   const [cookies, setCookies] = useState<"unknown" | "accepted" | "rejected">("unknown");
@@ -90,7 +91,7 @@ export function Shell({ business, children }: { business: Business; children: Re
         </button>
       </header>
       {children}
-      {textUs || quiet || shopDesk ? null : (
+      {textUs || hideTextUs ? null : (
         <button className="text-us" type="button" onClick={() => setTextUs(true)}>
           <span className="text-us-icon" aria-hidden="true">
             <ChatBadgeIcon />
@@ -439,7 +440,7 @@ export function SummaryBody() {
   );
 }
 
-export function MobileDock() {
+export function MobileDock({ showNext = true }: { showNext?: boolean }) {
   const cart = useCart();
   const [open, setOpen] = useState(false);
   if (!cart.items.length) return null;
@@ -450,7 +451,7 @@ export function MobileDock() {
       : "Price varies"
     : money(cart.quote.totalCents);
   return (
-    <div className={`dock${open ? " open" : ""}`}>
+    <div className={`dock${open ? " open" : ""}${showNext ? "" : " dock-simple"}`}>
       {open ? (
         <div className="dock-sheet">
           <SummaryBody />
@@ -468,10 +469,12 @@ export function MobileDock() {
             <ChevronUp />
           </span>
         </button>
-        <Link className="btn slim next-cta" href={cart.hasMain ? "/book" : "/"}>
-          <span>{cart.hasMain ? "Next" : "Add"}</span>
-          {cart.hasMain ? <NextArrow /> : null}
-        </Link>
+        {showNext ? (
+          <Link className="btn slim next-cta" href={cart.hasMain ? "/book" : "/"}>
+            <span>{cart.hasMain ? "Next" : "Add"}</span>
+            {cart.hasMain ? <NextArrow /> : null}
+          </Link>
+        ) : null}
       </div>
     </div>
   );

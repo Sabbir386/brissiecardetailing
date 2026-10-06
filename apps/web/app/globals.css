@@ -2503,8 +2503,8 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
   .text-us-icon { width: 34px; height: 34px; }
   .page { width: min(1120px, calc(100% - 28px)); max-width: 100%; padding-bottom: 110px; }
   body:has(.dock) .text-us {
-    left: 16px;
-    right: auto;
+    right: 16px;
+    left: auto;
     bottom: calc(76px + env(safe-area-inset-bottom));
   }
   body:has(.dock.open) .text-us {
@@ -2603,7 +2603,8 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
     border: 1px solid #d8dde3;
   }
   .includes-head { font-size: 15px; font-weight: 600; }
-  .page.book-page { padding-bottom: 72px; }
+  .page.book-page { padding-bottom: 110px; }
+  .book-summary { display: none; }
   .book-layout {
     grid-template-columns: 1fr;
     gap: 28px;

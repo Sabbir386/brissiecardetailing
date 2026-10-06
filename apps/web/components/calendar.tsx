@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clientSend } from "@/lib/api";
 import { useCart } from "@/lib/cart";
-import { CookieFooter } from "@/components/shell";
+import { CookieFooter, MobileDock } from "@/components/shell";
 import { vehicleLabel } from "@/lib/format";
 import type { Availability, Hold } from "@/lib/types";
 
@@ -118,6 +118,7 @@ export function CalendarBook() {
     return (
       <div className="page book-page">
         <p className="book-loading">Loading your appointment…</p>
+        <MobileDock showNext={false} />
       </div>
     );
   }
@@ -145,6 +146,7 @@ export function CalendarBook() {
         ) : (
           <p className="book-loading">Finding the next opening…</p>
         )}
+        <MobileDock showNext={false} />
       </div>
     );
   }
@@ -266,6 +268,7 @@ export function CalendarBook() {
         <BookSummary />
       </div>
       <CookieFooter />
+      <MobileDock showNext={false} />
     </div>
   );
 }
