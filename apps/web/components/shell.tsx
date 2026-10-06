@@ -5,29 +5,30 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCart } from "@/lib/cart";
 import { clientSend } from "@/lib/api";
-import { durationPhrase, money, vehicleLabel } from "@/lib/format";
+import { durationPhrase, formatPhoneDisplay, money, vehicleLabel } from "@/lib/format";
 import { BrandLogo } from "@/components/logo";
 import { TextUsSheet } from "@/components/text-us-sheet";
 import { setScrollLocked } from "@/lib/scroll-lock";
 import type { Business } from "@/lib/types";
 
+type MenuCustomer = { firstName: string | null; lastName: string | null; phone: string };
+
 export function Shell({ business, children }: { business: Business; children: React.ReactNode }) {
   const pathname = usePathname();
   const quiet = pathname === "/book" || pathname === "/checkout";
+  const shopDesk = pathname.startsWith("/admin");
   const [menu, setMenu] = useState(false);
   const [textUs, setTextUs] = useState(false);
   const [cookies, setCookies] = useState<"unknown" | "accepted" | "rejected">("unknown");
-  const [customerName, setCustomerName] = useState<string | null>(null);
+  const [customer, setCustomer] = useState<MenuCustomer | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("brissie-cookies");
     if (stored === "accepted" || stored === "rejected") setCookies(stored);
     else setCookies("unknown");
-    clientSend<{ customer: { firstName: string | null; phone: string } | null }>("/auth/me")
-      .then((data) => {
-        setCustomerName(data.customer ? data.customer.firstName || data.customer.phone : null);
-      })
-      .catch(() => setCustomerName(null));
+    clientSend<{ customer: MenuCustomer | null }>("/auth/me")
+      .then((data) => setCustomer(data.customer))
+      .catch(() => setCustomer(null));
   }, [pathname]);
 
   useEffect(() => {
@@ -64,6 +65,17 @@ export function Shell({ business, children }: { business: Business; children: Re
     setCookies(value);
   }
 
+  async function signOut() {
+    try {
+      await clientSend("/auth/logout", { method: "POST" });
+    } catch {
+      /* still leave the local session */
+    }
+    setCustomer(null);
+    setMenu(false);
+    window.location.assign("/");
+  }
+
   return (
     <div className={quiet ? "book-mode" : undefined}>
       <a className="skip" href="#main">
@@ -78,13 +90,13 @@ export function Shell({ business, children }: { business: Business; children: Re
         </button>
       </header>
       {children}
-      {textUs || quiet ? null : (
+      {textUs || quiet || shopDesk ? null : (
         <button className="text-us" type="button" onClick={() => setTextUs(true)}>
           <MessageIcon />
           Text us
         </button>
       )}
-      {cookies === "unknown" && !quiet ? (
+      {cookies === "unknown" && !quiet && !shopDesk ? (
         <aside className="cookie">
           <strong>Cookie preferences</strong>
           <p className="note">Analytics stay off until you accept. Booking works either way.</p>
@@ -168,14 +180,39 @@ export function Shell({ business, children }: { business: Business; children: Re
               </button>
             </div>
             <div className="drawer-foot">
-              {customerName ? (
-                <Link className="btn" href="/account" onClick={() => setMenu(false)}>
-                  {customerName}
-                </Link>
+              {customer ? (
+                <div className="drawer-account">
+                  <div className="drawer-account-row">
+                    <span className="drawer-avatar" aria-hidden="true">
+                      <UserIcon />
+                    </span>
+                    <span className="drawer-account-copy">
+                      <strong>{customer.firstName ? `Hi, ${customer.firstName}` : "You're signed in"}</strong>
+                      <em>{formatPhoneDisplay(customer.phone)}</em>
+                    </span>
+                  </div>
+                  <Link className="btn" href="/account" onClick={() => setMenu(false)}>
+                    Your appointments
+                  </Link>
+                  <button className="drawer-logout" type="button" onClick={signOut}>
+                    Sign out
+                  </button>
+                </div>
               ) : (
-                <Link className="btn" href="/sign-in" onClick={() => setMenu(false)}>
-                  Sign In
-                </Link>
+                <div className="drawer-account guest">
+                  <div className="drawer-account-row">
+                    <span className="drawer-avatar" aria-hidden="true">
+                      <UserIcon />
+                    </span>
+                    <span className="drawer-account-copy">
+                      <strong>Welcome</strong>
+                      <em>Book without an account, or sign in to see your bookings.</em>
+                    </span>
+                  </div>
+                  <Link className="btn" href="/sign-in" onClick={() => setMenu(false)}>
+                    Sign in
+                  </Link>
+                </div>
               )}
             </div>
           </aside>
@@ -188,20 +225,24 @@ export function Shell({ business, children }: { business: Business; children: Re
 
 function Hours({ business }: { business: Business }) {
   const [open, setOpen] = useState(false);
+  const week = mondayFirst(business.hours);
   return (
     <div className={`drawer-item hours${open ? " open" : ""}`}>
       <div className="drawer-copy">
         <span>Hours</span>
         <strong>{business.openUntilLabel}</strong>
         {open ? (
-          <ul className="hours-list">
-            {business.hours.map((hour) => (
-              <li key={hour.dayOfWeek}>
-                <span>{hour.label}</span>
-                <span>{hour.closed ? "Closed" : `${hour.open}–${hour.close}`}</span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="hours-list">
+              {week.map((hour) => (
+                <li key={hour.dayOfWeek} className={hourClass(hour)}>
+                  <span>{hour.label}</span>
+                  <span>{hour.closed ? "Closed" : `${hour.open} – ${hour.close}`}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="hours-zone">Times shown in business time zone ({business.hoursZoneLabel || "GMT-7"})</p>
+          </>
         ) : null}
       </div>
       <button type="button" className="round-action" aria-expanded={open} aria-label="Show weekly hours" onClick={() => setOpen((value) => !value)}>
@@ -209,6 +250,17 @@ function Hours({ business }: { business: Business }) {
       </button>
     </div>
   );
+}
+
+function mondayFirst(hours: Business["hours"]) {
+  return [...hours].sort((a, b) => ((a.dayOfWeek + 6) % 7) - ((b.dayOfWeek + 6) % 7));
+}
+
+function hourClass(hour: Business["hours"][number]) {
+  const classes = [];
+  if (hour.today) classes.push("today");
+  if (hour.closed) classes.push("closed");
+  return classes.join(" ") || undefined;
 }
 
 function CloseIcon() {
@@ -255,6 +307,15 @@ function FacebookIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
       <path d="M10.6 4.4H9.2c-.5 0-.8.3-.8.8v1.4h2.1l-.3 2H8.4V14H6.2V8.6H4.7v-2h1.5V5.4c0-1.6 1-2.6 2.6-2.6h1.8v1.6Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg className="drawer-avatar-user" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="8.1" r="3.6" fill="currentColor" />
+      <path d="M5 19.2c.7-3.6 3.2-5.5 7-5.5s6.3 1.9 7 5.5" fill="currentColor" />
     </svg>
   );
 }

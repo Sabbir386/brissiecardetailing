@@ -114,6 +114,21 @@ const selectionSchema = z.object({
     .max(12),
 });
 
+app.get("/", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      ok: true,
+      service: "brissiecardetailing api",
+      database: "connected",
+      website: "http://localhost:3000",
+      health: "/health",
+    });
+  } catch {
+    res.status(503).json({ ok: false, service: "brissiecardetailing api", database: "disconnected" });
+  }
+});
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true, payments: stripe ? "stripe" : devPayments ? "dev" : "off" });
 });
@@ -341,6 +356,10 @@ app.post(
       return created;
     }, { isolationLevel: "Serializable" });
 
+    if (!session?.customer) {
+      const token = await createSession("customer", customer.id);
+      res.setHeader("Set-Cookie", cookieHeader(token));
+    }
     res.status(201).json(presentBooking(booking));
   }),
 );
@@ -436,9 +455,10 @@ app.get(
     const session = await viewer(req);
     if (!session?.customer) throw new HttpError(401, "Sign in to see your appointments.");
     const bookings = await prisma.booking.findMany({
-      where: { customerId: session.customer.id, status: "confirmed", startAt: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) } },
+      where: { customerId: session.customer.id },
       include: { items: true, customer: true },
-      orderBy: { startAt: "asc" },
+      orderBy: { startAt: "desc" },
+      take: 40,
     });
     res.json(bookings.map(presentBooking));
   }),
@@ -475,17 +495,66 @@ app.get(
   "/admin/overview",
   asyncRoute(async (req, res) => {
     await requireAdmin(req);
-    const [services, hours, blocked, bookings] = await Promise.all([
+    const now = DateTime.now().setZone(ZONE);
+    const today = now.toISODate() || "";
+    const weekStart = now.startOf("week").toJSDate();
+    const [services, hours, blocked, bookings, customers, messages, business] = await Promise.all([
       prisma.service.findMany({ include: { options: { orderBy: { sortOrder: "asc" } }, category: true }, orderBy: { sortOrder: "asc" } }),
       prisma.weeklyHour.findMany({ orderBy: { dayOfWeek: "asc" } }),
       prisma.blockedDate.findMany({ orderBy: { date: "asc" } }),
-      prisma.booking.findMany({ include: { items: true, customer: true }, orderBy: { startAt: "desc" }, take: 50 }),
+      prisma.booking.findMany({ include: { items: true, customer: true }, orderBy: { startAt: "desc" }, take: 120 }),
+      prisma.customer.findMany({
+        include: { _count: { select: { bookings: true } }, bookings: { orderBy: { startAt: "desc" }, take: 1, select: { startAt: true } } },
+        orderBy: { firstName: "asc" },
+        take: 80,
+      }),
+      prisma.shopMessage.findMany({ orderBy: { createdAt: "desc" }, take: 40 }),
+      prisma.business.findUniqueOrThrow({ where: { id: "main" } }),
     ]);
+    const presented = bookings.map(presentBooking);
+    const remainingDueCents = presented
+      .filter((booking) => booking.status === "confirmed" && !booking.balanceCollected && (booking.balanceCents || 0) > 0)
+      .reduce((sum, booking) => sum + (booking.balanceCents || 0), 0);
     res.json({
+      business: {
+        name: business.name,
+        phone: business.phone,
+        phoneTel: business.phoneTel,
+        locationLine: business.locationLine,
+        instagramUrl: business.instagramUrl,
+        facebookUrl: business.facebookUrl,
+        cancellationPolicy: business.cancellationPolicy,
+        taxRateBps: business.taxRateBps,
+      },
       services: services.map((service) => ({ ...publicService(service), categoryName: service.category.name })),
       hours,
       blocked,
-      bookings: bookings.map(presentBooking),
+      bookings: presented,
+      customers: customers.map((customer) => ({
+        id: customer.id,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        email: customer.email,
+        phone: customer.phone,
+        bookingCount: customer._count.bookings,
+        lastVisit: customer.bookings[0]?.startAt.toISOString() || null,
+      })),
+      messages: messages.map((row) => ({
+        id: row.id,
+        name: row.name,
+        phone: row.phone,
+        message: row.message,
+        read: row.read,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      stats: {
+        todayDate: today,
+        today: presented.filter((booking) => booking.date === today && booking.status !== "cancelled").length,
+        upcoming: presented.filter((booking) => booking.status === "confirmed" && new Date(booking.endAt).getTime() >= now.toMillis()).length,
+        remainingDueCents,
+        unreadMessages: messages.filter((row) => !row.read).length,
+        completedThisWeek: bookings.filter((booking) => booking.status === "completed" && booking.completedAt && booking.completedAt >= weekStart).length,
+      },
     });
   }),
 );
@@ -496,7 +565,9 @@ app.put(
     await requireAdmin(req);
     const body = z
       .object({
+        name: z.string().trim().min(1).max(80).optional(),
         summary: z.string().min(1),
+        photo: z.string().trim().min(1).max(400).optional(),
         depositCents: z.number().int().min(0).max(500000),
         isAddon: z.boolean(),
         requiresDropoff: z.boolean(),
@@ -514,7 +585,9 @@ app.put(
     await prisma.service.update({
       where: { id: String(req.params.id) },
       data: {
+        name: body.name ?? undefined,
         summary: body.summary,
+        photo: body.photo ?? undefined,
         depositCents: body.depositCents,
         isAddon: body.isAddon,
         requiresDropoff: body.requiresDropoff,
@@ -588,6 +661,134 @@ app.delete(
   }),
 );
 
+app.patch(
+  "/admin/bookings/:id",
+  asyncRoute(async (req, res) => {
+    await requireAdmin(req);
+    const body = z
+      .object({
+        status: z.enum(["confirmed", "completed", "cancelled"]).optional(),
+        shopNote: z.string().max(2000).optional(),
+        cancelReason: z.string().max(400).optional(),
+        balanceCollected: z.boolean().optional(),
+      })
+      .parse(req.body);
+    const booking = await prisma.booking.findUnique({
+      where: { id: String(req.params.id) },
+      include: { items: true, customer: true },
+    });
+    if (!booking) throw new HttpError(404, "That appointment was not found.");
+
+    const data: {
+      status?: string;
+      shopNote?: string | null;
+      cancelReason?: string | null;
+      cancelledAt?: Date | null;
+      completedAt?: Date | null;
+      balanceCollected?: boolean;
+      balanceCollectedAt?: Date | null;
+    } = {};
+
+    if (body.shopNote !== undefined) data.shopNote = body.shopNote.trim() || null;
+    if (body.balanceCollected !== undefined) {
+      data.balanceCollected = body.balanceCollected;
+      data.balanceCollectedAt = body.balanceCollected ? new Date() : null;
+    }
+    if (body.status && body.status !== booking.status) {
+      if (body.status === "cancelled") {
+        data.status = "cancelled";
+        data.cancelledAt = new Date();
+        data.cancelReason = body.cancelReason?.trim() || null;
+        data.completedAt = null;
+      } else if (body.status === "completed") {
+        if (booking.status === "cancelled") {
+          throw new HttpError(400, "Reopen this appointment before marking the job complete.");
+        }
+        data.status = "completed";
+        data.completedAt = new Date();
+        data.cancelledAt = null;
+        data.cancelReason = null;
+      } else {
+        if (booking.status === "cancelled") {
+          const clash = await prisma.booking.findFirst({
+            where: {
+              id: { not: booking.id },
+              status: "confirmed",
+              startAt: { lt: booking.endAt },
+              endAt: { gt: booking.startAt },
+            },
+          });
+          if (clash) throw new HttpError(409, "That time is already booked. Keep this job cancelled or pick another opening.");
+        }
+        data.status = "confirmed";
+        data.cancelledAt = null;
+        data.completedAt = null;
+        data.cancelReason = null;
+      }
+    }
+
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data,
+      include: { items: true, customer: true },
+    });
+    res.json(presentBooking(updated));
+  }),
+);
+
+app.put(
+  "/admin/business",
+  asyncRoute(async (req, res) => {
+    await requireAdmin(req);
+    const body = z
+      .object({
+        name: z.string().trim().min(2).max(80),
+        phone: z.string().trim().min(6).max(40),
+        phoneTel: z.string().trim().min(8).max(24),
+        locationLine: z.string().trim().min(2).max(160),
+        instagramUrl: z.string().trim().url().max(200).optional().or(z.literal("")),
+        facebookUrl: z.string().trim().url().max(200).optional().or(z.literal("")),
+        cancellationPolicy: z.string().trim().min(8).max(4000),
+        taxRateBps: z.number().int().min(0).max(3000),
+      })
+      .parse(req.body);
+    const business = await prisma.business.update({
+      where: { id: "main" },
+      data: {
+        name: body.name,
+        phone: body.phone,
+        phoneTel: body.phoneTel,
+        locationLine: body.locationLine,
+        instagramUrl: body.instagramUrl || null,
+        facebookUrl: body.facebookUrl || null,
+        cancellationPolicy: body.cancellationPolicy,
+        taxRateBps: body.taxRateBps,
+      },
+    });
+    res.json(business);
+  }),
+);
+
+app.patch(
+  "/admin/messages/:id",
+  asyncRoute(async (req, res) => {
+    await requireAdmin(req);
+    const body = z.object({ read: z.boolean() }).parse(req.body);
+    const row = await prisma.shopMessage.update({
+      where: { id: String(req.params.id) },
+      data: { read: body.read },
+    });
+    res.json({
+      id: row.id,
+      name: row.name,
+      phone: row.phone,
+      message: row.message,
+      read: row.read,
+      createdAt: row.createdAt.toISOString(),
+    });
+  }),
+);
+
 app.post(
   "/text-us",
   asyncRoute(async (req, res) => {
@@ -599,6 +800,9 @@ app.post(
       })
       .parse(req.body);
     const from = normalizePhone(body.phone);
+    await prisma.shopMessage.create({
+      data: { name: body.name, phone: from, message: body.message },
+    });
     const business = await prisma.business.findUnique({ where: { id: "main" } });
     const shop = business?.phoneTel || from;
     await sendSms(
@@ -688,6 +892,7 @@ function presentBooking(booking: {
   state: string;
   zip: string;
   note: string | null;
+  shopNote?: string | null;
   subtotalCents: number;
   taxCents: number;
   totalCents: number;
@@ -697,6 +902,12 @@ function presentBooking(booking: {
   devPayment: boolean;
   cardSaved: boolean;
   status: string;
+  balanceCollected?: boolean;
+  balanceCollectedAt?: Date | null;
+  completedAt?: Date | null;
+  cancelledAt?: Date | null;
+  cancelReason?: string | null;
+  createdAt?: Date;
   items: {
     serviceName: string;
     optionName: string;
@@ -715,10 +926,15 @@ function presentBooking(booking: {
     status: booking.status,
     label: `${start.toFormat("cccc, LLL d")} · ${start.toFormat("h:mm a")} – ${end.toFormat("h:mm a")} PT`,
     date: start.toISODate(),
+    startAt: start.toISO() || booking.startAt.toISOString(),
+    endAt: end.toISO() || booking.endAt.toISOString(),
+    dayLabel: start.toFormat("cccc, LLL d"),
+    timeLabel: `${start.toFormat("h:mm a")} – ${end.toFormat("h:mm a")}`,
     address: [booking.addressLine1, booking.addressLine2, `${booking.city}, ${booking.state} ${booking.zip}`]
       .filter(Boolean)
       .join(", "),
     note: booking.note,
+    shopNote: booking.shopNote ?? null,
     subtotalCents: booking.subtotalCents,
     taxCents: booking.taxCents,
     totalCents: booking.totalCents,
@@ -727,6 +943,12 @@ function presentBooking(booking: {
     priceOnRequest: booking.priceOnRequest,
     devPayment: booking.devPayment,
     cardSaved: booking.cardSaved,
+    balanceCollected: Boolean(booking.balanceCollected),
+    balanceCollectedAt: booking.balanceCollectedAt?.toISOString() ?? null,
+    completedAt: booking.completedAt?.toISOString() ?? null,
+    cancelledAt: booking.cancelledAt?.toISOString() ?? null,
+    cancelReason: booking.cancelReason ?? null,
+    createdAt: booking.createdAt?.toISOString() ?? null,
     items: booking.items,
     customer: booking.customer,
   };

@@ -26,6 +26,29 @@ export function clockLabel(time: string) {
   return `${hour12}:${minute} ${suffix}`;
 }
 
+export function formatPhoneDisplay(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("61") && digits.length >= 10) {
+    let national = digits.slice(2);
+    if (national.startsWith("0")) national = national.slice(1);
+    if (national.length >= 9) {
+      return `+61 ${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`;
+    }
+    return `+61 ${national}`;
+  }
+  if (digits.startsWith("1") && digits.length === 11) {
+    return `+1 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  }
+  if (digits.length === 10) return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+  if (phone.startsWith("+") && digits.length > 8) {
+    const ccLen = digits.length - 10;
+    const cc = digits.slice(0, Math.max(ccLen, 1));
+    const rest = digits.slice(cc.length);
+    return `+${cc} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6)}`.trim();
+  }
+  return phone;
+}
+
 export const states = ["QLD", "NSW", "VIC", "WA", "SA", "TAS", "ACT", "NT"];
 
 export const countries = [

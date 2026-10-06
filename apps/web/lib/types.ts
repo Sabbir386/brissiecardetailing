@@ -42,6 +42,7 @@ export type Hour = {
   closed: boolean;
   open: string;
   close: string;
+  today?: boolean;
 };
 
 export type Business = {
@@ -54,6 +55,7 @@ export type Business = {
   facebookUrl: string | null;
   cancellationPolicy: string;
   openUntilLabel: string;
+  hoursZoneLabel: string;
   hours: Hour[];
 };
 
@@ -100,8 +102,13 @@ export type Booking = {
   status: string;
   label: string;
   date: string;
+  startAt: string;
+  endAt: string;
+  dayLabel: string;
+  timeLabel: string;
   address: string;
   note: string | null;
+  shopNote: string | null;
   subtotalCents: number;
   taxCents: number;
   totalCents: number;
@@ -110,6 +117,12 @@ export type Booking = {
   priceOnRequest: boolean;
   devPayment: boolean;
   cardSaved: boolean;
+  balanceCollected: boolean;
+  balanceCollectedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  createdAt: string | null;
   items: {
     serviceName: string;
     optionName: string;

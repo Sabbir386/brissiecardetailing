@@ -25,6 +25,7 @@ export async function getBusiness(): Promise<Business> {
       facebookUrl: "https://www.facebook.com/brissiecardetailing",
       cancellationPolicy: "Deposits are non-refundable.",
       openUntilLabel: "Open until 19:00",
+      hoursZoneLabel: "GMT-7",
       hours: [],
     };
   }

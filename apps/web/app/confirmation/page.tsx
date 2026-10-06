@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AppointmentCard } from "@/components/appointment-card";
 import { serverGet } from "@/lib/api";
-import { money } from "@/lib/format";
 import type { Booking } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -17,8 +17,13 @@ export default async function ConfirmationPage({
   const params = await searchParams;
   if (!params.token) {
     return (
-      <div className="page">
-        <h1>No appointment to show</h1>
+      <div className="page appt-page">
+        <div className="appt-empty">
+          <h1>No appointment to show</h1>
+          <Link className="btn" href="/account">
+            Your appointments
+          </Link>
+        </div>
       </div>
     );
   }
@@ -27,39 +32,37 @@ export default async function ConfirmationPage({
     booking = await serverGet<Booking>(`/bookings/token/${params.token}`, 0);
   } catch {
     return (
-      <div className="page">
-        <h1>Appointment not found</h1>
+      <div className="page appt-page">
+        <div className="appt-empty">
+          <h1>Appointment not found</h1>
+          <Link className="btn" href="/account">
+            Your appointments
+          </Link>
+        </div>
       </div>
     );
   }
   return (
-    <div className="page">
-      <div className="center-card">
-        <h1>You’re booked</h1>
-        <p>{booking.label}</p>
-        <p>{booking.address}</p>
-        <ul className="clean">
-          {booking.items.map((item) => (
-            <li key={`${item.serviceName}-${item.optionName}`}>
-              {item.serviceName} · {item.optionName}
-              {item.requiresDropoff ? " · drop-off" : ""}
-              {item.priceOnRequest ? " · price confirmed at the appointment" : ` · ${money(item.priceCents)}`}
-            </li>
-          ))}
-        </ul>
-        <div className="totals">
-          <div>
-            <span>Deposit paid</span>
-            <span>{money(booking.depositCents)}</span>
-          </div>
-          <div>
-            <span>Due at appointment</span>
-            <span>{booking.balanceCents === null ? "Quoted after inspection" : money(booking.balanceCents)}</span>
-          </div>
+    <div className="page appt-page">
+      <header className="appt-head">
+        <div>
+          <p className="appt-kicker">You’re booked</p>
+          <h1>Appointment confirmed</h1>
         </div>
-        {booking.devPayment ? <p className="note">This deposit was recorded in test mode and was not charged to a bank.</p> : null}
-        {booking.note ? <p className="note">Note: {booking.note}</p> : null}
-        <Link className="btn" href="/">
+        <Link className="appt-book-link" href="/account">
+          Your appointments
+        </Link>
+      </header>
+      <AppointmentCard booking={booking} featured showLink={false} />
+      {booking.devPayment ? (
+        <p className="note">This deposit was recorded in test mode and was not charged to a bank.</p>
+      ) : null}
+      {booking.note ? <p className="note">Note: {booking.note}</p> : null}
+      <div className="appt-actions">
+        <Link className="btn" href="/account">
+          View my appointments
+        </Link>
+        <Link className="appt-secondary" href="/">
           Back to services
         </Link>
       </div>

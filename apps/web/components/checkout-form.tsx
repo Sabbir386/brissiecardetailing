@@ -5,8 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clientSend } from "@/lib/api";
 import { CookieFooter } from "@/components/shell";
-import { countries, states, vehicleLabel } from "@/lib/format";
+import { countries, formatPhoneDisplay, states, vehicleLabel } from "@/lib/format";
 import type { Booking, Business, Hold } from "@/lib/types";
+
+type PayMethod = "card" | "gpay" | "gift";
+type FieldErrors = Partial<Record<"phone" | "firstName" | "lastName" | "email" | "card" | "address" | "city" | "state" | "zip" | "policy" | "gift", string>>;
 
 export function CheckoutForm({ holdId, business }: { holdId: string; business: Business }) {
   const router = useRouter();
@@ -23,13 +26,30 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
   const [summaryOpen, setSummaryOpen] = useState(true);
   const [signedName, setSignedName] = useState<string | null>(null);
   const [card, setCard] = useState({ number: "", exp: "", cvc: "" });
+  const [payMethod, setPayMethod] = useState<PayMethod>("card");
+  const [gift, setGift] = useState("");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [fields, setFields] = useState({
+    phone: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    zip: "",
+    note: "",
+  });
 
   useEffect(() => {
     clientSend<Hold>(`/holds/${holdId}`)
       .then(setHold)
       .catch((reason: Error) => setError(reason.message));
     clientSend<{ customer: { firstName: string | null; phone: string } | null }>("/auth/me")
-      .then((data) => setSignedName(data.customer ? data.customer.firstName || data.customer.phone : null))
+      .then((data) =>
+        setSignedName(data.customer ? data.customer.firstName || formatPhoneDisplay(data.customer.phone) : null),
+      )
       .catch(() => setSignedName(null));
   }, [holdId]);
 
@@ -46,43 +66,66 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
   const expired = hold ? left === 0 : false;
   const canBook = Boolean(hold && !expired && !busy);
 
+  function setField<K extends keyof typeof fields>(name: K, value: (typeof fields)[K]) {
+    setFields((current) => ({ ...current, [name]: value }));
+    setErrors((current) => {
+      const next = { ...current, [name]: undefined };
+      if (name === "addressLine1") next.address = undefined;
+      return next;
+    });
+  }
+
+  function validate() {
+    const next: FieldErrors = {};
+    if (!fields.phone.trim()) next.phone = "Phone is required";
+    if (!fields.firstName.trim()) next.firstName = "First name is required";
+    if (!fields.lastName.trim()) next.lastName = "Last name is required";
+    if (!fields.email.trim()) next.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email.trim())) next.email = "Please enter a valid email";
+    if (!stripeKey && !validCard(card)) next.card = "Saving a card on file is required to book.";
+    if (payMethod === "gift" && !gift.trim()) next.gift = "Please enter a gift card";
+    if (!fields.addressLine1.trim() || fields.addressLine1.trim().length < 3) next.address = "Please enter a valid street address";
+    if (!fields.city.trim()) next.city = "Please enter a valid city";
+    if (!fields.state.trim()) next.state = "Please choose a state";
+    if (!fields.zip.trim() || fields.zip.trim().length < 3) next.zip = "Please enter a valid postcode";
+    if (!policy) next.policy = "Please agree to the cancellation policy";
+    return next;
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!hold || expired) return;
-    if (!policy) {
-      setError("Please agree to the cancellation policy to continue.");
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      const first = document.querySelector(".co-invalid, .co-field-error");
+      first?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     setBusy(true);
     setError("");
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const field = (name: string) => String(data.get(name) || "").trim();
     try {
       let paymentIntentId: string | undefined;
       let devPayment = false;
       if (stripeKey) {
         paymentIntentId = await payWithStripe(hold.id, saveCard, stripeKey);
       } else {
-        if (!validCard(card)) {
-          throw new Error("Enter a card number, expiry, and CVV to continue.");
-        }
         devPayment = true;
       }
       const booking = await clientSend<Booking>("/bookings", {
         method: "POST",
         body: JSON.stringify({
           holdId: hold.id,
-          firstName: field("firstName"),
-          lastName: field("lastName"),
-          email: field("email"),
-          phone: fullPhone(country.dial, field("phone")),
-          addressLine1: field("addressLine1"),
-          addressLine2: field("addressLine2"),
-          city: field("city"),
-          state: field("state"),
-          zip: field("zip"),
-          note: field("note"),
+          firstName: fields.firstName.trim(),
+          lastName: fields.lastName.trim(),
+          email: fields.email.trim(),
+          phone: fullPhone(country.dial, fields.phone),
+          addressLine1: fields.addressLine1.trim(),
+          addressLine2: fields.addressLine2.trim(),
+          city: fields.city.trim(),
+          state: fields.state,
+          zip: fields.zip.trim(),
+          note: fields.note.trim(),
           policyAccepted: true,
           saveCard,
           paymentIntentId,
@@ -91,6 +134,7 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
       });
       localStorage.removeItem("brissie-cart");
       router.push(`/confirmation?token=${booking.token}`);
+      router.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Booking failed.");
       setBusy(false);
@@ -122,7 +166,7 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
       </header>
 
       <div className="co-layout">
-        <form id="checkout-form" className="co-form" onSubmit={submit}>
+        <form id="checkout-form" className="co-form" onSubmit={submit} noValidate>
           <section className="co-block">
             <div className="co-head-row">
               <h2>Contact info</h2>
@@ -135,7 +179,7 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
               )}
             </div>
 
-            <div className="co-phone">
+            <div className={`co-phone${errors.phone ? " co-invalid" : ""}`}>
               <label className="co-dial">
                 <span>
                   {country.code} {country.dial}
@@ -149,53 +193,96 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
                   ))}
                 </select>
               </label>
-              <input name="phone" required inputMode="tel" placeholder="Phone number" autoComplete="tel-national" />
+              <input
+                name="phone"
+                value={fields.phone}
+                onChange={(event) => setField("phone", event.target.value)}
+                inputMode="tel"
+                placeholder="Phone number"
+                autoComplete="tel-national"
+              />
             </div>
+            {errors.phone ? <FieldError>{errors.phone}</FieldError> : null}
             <p className="co-legal">
               By providing your phone number, you acknowledge you will receive occasional informational messages, including automated messages, on your mobile device from this merchant. Text STOP to opt out at any time, and text HELP to get HELP. Message and data rates may apply.
             </p>
 
             <div className="co-row2">
-              <input name="firstName" required placeholder="First name" autoComplete="given-name" />
-              <input name="lastName" required placeholder="Last name" autoComplete="family-name" />
+              <div className="co-wrap">
+                <input
+                  className={errors.firstName ? "co-invalid" : undefined}
+                  name="firstName"
+                  value={fields.firstName}
+                  onChange={(event) => setField("firstName", event.target.value)}
+                  placeholder="First name"
+                  autoComplete="given-name"
+                />
+                {errors.firstName ? <FieldError>{errors.firstName}</FieldError> : null}
+              </div>
+              <div className="co-wrap">
+                <input
+                  className={errors.lastName ? "co-invalid" : undefined}
+                  name="lastName"
+                  value={fields.lastName}
+                  onChange={(event) => setField("lastName", event.target.value)}
+                  placeholder="Last name"
+                  autoComplete="family-name"
+                />
+                {errors.lastName ? <FieldError>{errors.lastName}</FieldError> : null}
+              </div>
             </div>
-            <input name="email" type="email" required placeholder="Email" autoComplete="email" />
+            <div className="co-wrap">
+              <input
+                className={errors.email ? "co-invalid" : undefined}
+                name="email"
+                type="email"
+                value={fields.email}
+                onChange={(event) => setField("email", event.target.value)}
+                placeholder="Email"
+                autoComplete="email"
+              />
+              {errors.email ? <FieldError>{errors.email}</FieldError> : null}
+            </div>
           </section>
 
           <section className="co-block">
             <h2>Card on file</h2>
-            <p className="co-copy">
-              A card on file is required to book. Purchase will never be made without your approval. Protected and encrypted.
-            </p>
-            <div className="co-cardbox">
+            <p className="co-copy">A card on file is required to book. Purchase will never be made without your approval. Protected and encrypted.</p>
+            <div className={`co-cardbox${errors.card ? " co-invalid" : ""}`}>
               <CardIcon />
               <input
                 value={card.number}
-                onChange={(event) => setCard({ ...card, number: formatCard(event.target.value) })}
+                onChange={(event) => {
+                  setCard({ ...card, number: formatCard(event.target.value) });
+                  setErrors((current) => ({ ...current, card: undefined }));
+                }}
                 placeholder="Card number"
                 inputMode="numeric"
                 autoComplete="cc-number"
-                required={!stripeKey}
                 aria-label="Card number"
               />
               <input
                 className="co-card-exp"
                 value={card.exp}
-                onChange={(event) => setCard({ ...card, exp: formatExp(event.target.value) })}
+                onChange={(event) => {
+                  setCard({ ...card, exp: formatExp(event.target.value) });
+                  setErrors((current) => ({ ...current, card: undefined }));
+                }}
                 placeholder="MM/YY"
                 inputMode="numeric"
                 autoComplete="cc-exp"
-                required={!stripeKey}
                 aria-label="Expiry"
               />
               <input
                 className="co-card-cvc"
                 value={card.cvc}
-                onChange={(event) => setCard({ ...card, cvc: event.target.value.replace(/\D/g, "").slice(0, 4) })}
+                onChange={(event) => {
+                  setCard({ ...card, cvc: event.target.value.replace(/\D/g, "").slice(0, 4) });
+                  setErrors((current) => ({ ...current, card: undefined }));
+                }}
                 placeholder="CVV"
                 inputMode="numeric"
                 autoComplete="cc-csc"
-                required={!stripeKey}
                 aria-label="CVV"
               />
             </div>
@@ -204,48 +291,109 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
               <span>I authorise {business.name} to save this card on file for future purchases.</span>
               <i title="The remaining balance is only charged with your approval after the job.">i</i>
             </label>
+            {errors.card ? <FieldError>{errors.card}</FieldError> : null}
           </section>
 
           <section className="co-block">
             <h2>Pay a deposit</h2>
-            <div className="co-pay on">
-              <strong>
-                <CardIcon />
-                Credit or debit card
-              </strong>
-              <p>We’ll use the card on file above.</p>
+            <div className={`co-pay${payMethod === "card" ? " on" : ""}`}>
+              <button type="button" className="co-pay-hit" onClick={() => setPayMethod("card")}>
+                <strong>
+                  <CardIcon />
+                  Credit or debit card
+                </strong>
+              </button>
+              {payMethod === "card" ? <p>We’ll use the card on file above.</p> : null}
             </div>
-            <div className="co-pay muted" aria-disabled="true">
-              <strong>
-                <GPayIcon />
-                Google Pay
-              </strong>
+            <div className={`co-pay${payMethod === "gpay" ? " on" : ""}`}>
+              <button type="button" className="co-pay-hit" onClick={() => setPayMethod("gpay")}>
+                <strong>
+                  <GPayIcon />
+                  Google Pay
+                </strong>
+              </button>
             </div>
-            <div className="co-pay muted">
-              <strong>
-                <GiftIcon />
-                Gift card
-              </strong>
+            <div className={`co-pay${payMethod === "gift" ? " on" : ""}`}>
+              <button type="button" className="co-pay-hit" onClick={() => setPayMethod("gift")}>
+                <strong>
+                  <GiftIcon />
+                  Gift card
+                </strong>
+              </button>
+              {payMethod === "gift" ? (
+                <div className="co-gift">
+                  <p>To use a gift card online, it must cover the total due today:</p>
+                  <label className={`co-gift-field${errors.gift ? " co-invalid" : ""}`}>
+                    <GiftIcon />
+                    <input
+                      value={gift}
+                      onChange={(event) => {
+                        setGift(event.target.value);
+                        setErrors((current) => ({ ...current, gift: undefined }));
+                      }}
+                      placeholder="Gift card"
+                      aria-label="Gift card"
+                    />
+                  </label>
+                  {errors.gift ? <FieldError>{errors.gift}</FieldError> : null}
+                </div>
+              ) : null}
             </div>
           </section>
 
           <section className="co-block">
             <h2>Where will this appointment take place?</h2>
             <p className="co-copy">Enter an address, and we’ll come to you.</p>
-            <input name="addressLine1" required placeholder="Street Address" autoComplete="address-line1" />
-            <input name="addressLine2" placeholder="Apt./Suite" autoComplete="address-line2" />
-            <input name="city" required placeholder="City" autoComplete="address-level2" />
+            <div className="co-wrap">
+              <input
+                className={errors.address ? "co-invalid" : undefined}
+                name="addressLine1"
+                value={fields.addressLine1}
+                onChange={(event) => setField("addressLine1", event.target.value)}
+                placeholder="Street Address"
+                autoComplete="address-line1"
+              />
+              {errors.address ? <FieldError>{errors.address}</FieldError> : null}
+            </div>
+            <input name="addressLine2" value={fields.addressLine2} onChange={(event) => setField("addressLine2", event.target.value)} placeholder="Apt./Suite" autoComplete="address-line2" />
+            <div className="co-wrap">
+              <input
+                className={errors.city ? "co-invalid" : undefined}
+                name="city"
+                value={fields.city}
+                onChange={(event) => setField("city", event.target.value)}
+                placeholder="City"
+                autoComplete="address-level2"
+              />
+              {errors.city ? <FieldError>{errors.city}</FieldError> : null}
+            </div>
             <div className="co-row2">
-              <label className="co-select">
-                <select name="state" defaultValue="QLD" required aria-label="State">
-                  {states.map((state) => (
-                    <option key={state} value={state}>
-                      {state}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <input name="zip" required minLength={3} maxLength={12} placeholder="Postcode" autoComplete="postal-code" />
+              <div className="co-wrap">
+                <label className={`co-select${errors.state ? " co-invalid" : ""}`}>
+                  <select name="state" value={fields.state} onChange={(event) => setField("state", event.target.value)} aria-label="State">
+                    <option value="">State</option>
+                    {states.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {errors.state ? <FieldError>{errors.state}</FieldError> : null}
+              </div>
+              <div className="co-wrap">
+                <input
+                  className={errors.zip ? "co-invalid" : undefined}
+                  name="zip"
+                  value={fields.zip}
+                  onChange={(event) => setField("zip", event.target.value)}
+                  minLength={3}
+                  maxLength={12}
+                  placeholder="Postcode"
+                  autoComplete="postal-code"
+                />
+                {errors.zip ? <FieldError>{errors.zip}</FieldError> : null}
+              </div>
             </div>
           </section>
 
@@ -256,26 +404,34 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
                 {noteOpen ? "Remove" : "Add"}
               </button>
             </div>
-            {noteOpen ? <textarea name="note" rows={4} placeholder="Add a note for this appointment" /> : <input type="hidden" name="note" value="" />}
+            {noteOpen ? <textarea name="note" rows={4} value={fields.note} onChange={(event) => setField("note", event.target.value)} placeholder="Add a note for this appointment" /> : <input type="hidden" name="note" value="" />}
           </section>
 
           <section className="co-block last">
             <h2>Cancellation policy</h2>
             <p className="co-copy">
-              Refunds are subject to the policies of {business.name}. {hold ? cancelWindow(hold.date, business.name) : null}{" "}
+              This appointment can’t be cancelled or rescheduled after the cancellation window has passed.{" "}
               <button className="co-policy-link" type="button" onClick={() => setPolicyOpen(true)}>
                 See full policy
               </button>
             </p>
             <label className="co-check">
-              <input type="checkbox" checked={policy} onChange={(event) => setPolicy(event.target.checked)} required />
+              <input
+                type="checkbox"
+                checked={policy}
+                onChange={(event) => {
+                  setPolicy(event.target.checked);
+                  setErrors((current) => ({ ...current, policy: undefined }));
+                }}
+              />
               <span>I have read and agreed to the cancellation policy of {business.name}.</span>
             </label>
+            {errors.policy ? <FieldError>{errors.policy}</FieldError> : null}
           </section>
 
           {error ? <p className="error">{error}</p> : null}
           <p className="co-fine">
-            By clicking on ‘Book Appointment’, you will be charged the deposit amount noted above, and an account can be created for you with this booking. You can opt out later using your mobile number at any time.
+            By clicking on ‘Book Appointment’, you will be charged the deposit amount noted above, and an account can be created for you with this booking. You can sign back in using your mobile number at any time.
           </p>
         </form>
 
@@ -310,6 +466,15 @@ export function CheckoutForm({ holdId, business }: { holdId: string; business: B
   );
 }
 
+function FieldError({ children }: { children: string }) {
+  return (
+    <p className="co-field-error">
+      <ErrorIcon />
+      {children}
+    </p>
+  );
+}
+
 function HoldSummary({ hold, open, onToggle }: { hold: Hold; open: boolean; onToggle: () => void }) {
   const when = useMemo(() => summaryWhen(hold), [hold]);
   return (
@@ -324,7 +489,7 @@ function HoldSummary({ hold, open, onToggle }: { hold: Hold; open: boolean; onTo
             Est. due today: {usd(hold.quote.depositCents)}
           </em>
         </span>
-        <b className="summary-chevron" aria-hidden="true">
+        <b className="co-sum-chevron" aria-hidden="true">
           <svg width="14" height="14" viewBox="0 0 14 14">
             <path d="M3 9l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -428,6 +593,15 @@ async function payWithStripe(holdId: string, saveCard: boolean, publishableKey: 
   const result = await stripe.confirmCardPayment(intent.clientSecret);
   if (result.error || !result.paymentIntent) throw new Error(result.error?.message || "The deposit was not paid.");
   return result.paymentIntent.id;
+}
+
+function ErrorIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="7" cy="7" r="6.2" fill="#d92d20" />
+      <path d="M7 3.6v4.2M7 10.2h.01" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function ChevronDown() {

@@ -15,20 +15,24 @@ export function SignInForm() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
-  const [devCode, setDevCode] = useState("");
+  const [onScreenCode, setOnScreenCode] = useState("");
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [wait, setWait] = useState(0);
 
   async function requestCode(event?: React.FormEvent) {
     event?.preventDefault();
     setError("");
+    setCopied(false);
     try {
       const result = await clientSend<{ devCode?: string }>("/auth/code", {
         method: "POST",
         body: JSON.stringify({ phone: `${dial}${phone.replace(/\D/g, "")}` }),
       });
+      const nextCode = result.devCode || "";
       setSent(true);
-      setDevCode(result.devCode || "");
+      setOnScreenCode(nextCode);
+      setCode(nextCode);
       setWait(30);
       const timer = window.setInterval(() => {
         setWait((value) => {
@@ -59,10 +63,22 @@ export function SignInForm() {
     }
   }
 
+  async function copyCode() {
+    if (!onScreenCode) return;
+    try {
+      await navigator.clipboard.writeText(onScreenCode);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <div className="center-card">
       <BrandLogo href={null} size={88} stacked />
       <h1>Sign in to brissiecardetailing</h1>
+      <p className="note">New customers can book without signing in. Use your mobile number here to see appointments you’ve already booked.</p>
       <form onSubmit={sent ? verify : requestCode}>
         <div className="row-2">
           <label className="field">
@@ -80,13 +96,34 @@ export function SignInForm() {
             <input value={phone} onChange={(event) => setPhone(event.target.value)} required inputMode="tel" />
           </label>
         </div>
+        {onScreenCode ? (
+          <div className="signin-otp">
+            <p className="signin-otp-kicker">Your sign-in code</p>
+            <div className="signin-otp-digits" aria-label={`Sign-in code ${onScreenCode.split("").join(" ")}`}>
+              {onScreenCode.split("").map((digit, index) => (
+                <span key={`${digit}-${index}`}>{digit}</span>
+              ))}
+            </div>
+            <p className="signin-otp-copy">Enter this code below. It expires in 10 minutes.</p>
+            <button className="signin-otp-copy-btn" type="button" onClick={copyCode}>
+              {copied ? "Copied" : "Copy code"}
+            </button>
+          </div>
+        ) : null}
         {sent ? (
           <label className="field">
             6-digit code
-            <input value={code} onChange={(event) => setCode(event.target.value)} required inputMode="numeric" pattern="\d{6}" />
+            <input
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              required
+              inputMode="numeric"
+              pattern="\d{6}"
+              autoComplete="one-time-code"
+              autoFocus
+            />
           </label>
         ) : null}
-        {devCode ? <p className="note">Development code: {devCode}</p> : null}
         {error ? <p className="error">{error}</p> : null}
         <button className="btn" type="submit">
           {sent ? "Sign in" : "Request Sign-in Code"}

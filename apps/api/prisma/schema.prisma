@@ -140,11 +140,26 @@ model Booking {
   priceOnRequest  Boolean       @default(false)
   stripePaymentIntentId String?
   devPayment      Boolean       @default(false)
-  cardSaved       Boolean       @default(false)
-  policyAccepted  Boolean
-  status          String
-  createdAt       DateTime      @default(now())
-  items           BookingItem[]
+  cardSaved           Boolean       @default(false)
+  policyAccepted      Boolean
+  status              String
+  shopNote            String?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  cancelReason        String?
+  balanceCollected    Boolean       @default(false)
+  balanceCollectedAt  DateTime?
+  createdAt           DateTime      @default(now())
+  items               BookingItem[]
+}
+
+model ShopMessage {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 model BookingItem {

@@ -172,26 +172,43 @@ export async function businessPayload() {
   const business = await prisma.business.findUniqueOrThrow({ where: { id: "main" } });
   const hours = await prisma.weeklyHour.findMany({ orderBy: { dayOfWeek: "asc" } });
   const now = DateTime.now().setZone(ZONE);
-  const today = hours.find((hour) => hour.dayOfWeek === jsDay(now));
-  let openUntilLabel = "Closed today";
-  if (today && !today.closed) {
-    const close = now.startOf("day").plus({ minutes: today.closeMin });
-    const open = now.startOf("day").plus({ minutes: today.openMin });
-    if (now < open) openUntilLabel = `Opens at ${open.toFormat("HH:mm")}`;
-    else if (now < close) openUntilLabel = `Open until ${close.toFormat("HH:mm")}`;
-    else openUntilLabel = "Closed for today";
-  }
+  const todayIndex = jsDay(now);
   return {
     ...business,
-    openUntilLabel,
+    openUntilLabel: hoursStatusLabel(now, hours),
+    hoursZoneLabel: gmtLabel(now),
     hours: hours.map((hour) => ({
       dayOfWeek: hour.dayOfWeek,
       label: dayNames[hour.dayOfWeek],
       closed: hour.closed,
       open: minutesToClock(hour.openMin),
       close: minutesToClock(hour.closeMin),
+      today: hour.dayOfWeek === todayIndex,
     })),
   };
+}
+
+function hoursStatusLabel(
+  now: DateTime,
+  hours: { dayOfWeek: number; openMin: number; closeMin: number; closed: boolean }[],
+) {
+  for (let offset = 0; offset < 7; offset += 1) {
+    const day = now.plus({ days: offset });
+    const rule = hours.find((hour) => hour.dayOfWeek === jsDay(day));
+    if (!rule || rule.closed) continue;
+    const open = day.startOf("day").plus({ minutes: rule.openMin });
+    const close = day.startOf("day").plus({ minutes: rule.closeMin });
+    if (offset === 0 && now >= open && now < close) return `Open until ${close.toFormat("HH:mm")}`;
+    if (offset === 0 && now < open) return `Opens at ${open.toFormat("HH:mm")}`;
+    if (offset === 0) continue;
+    return `Closed · Opens ${day.toFormat("cccc")} ${open.toFormat("HH:mm")}`;
+  }
+  return "Closed";
+}
+
+function gmtLabel(now: DateTime) {
+  const hours = now.offset / 60;
+  return `GMT${hours}`;
 }
 
 export function minutesToClock(minutes: number) {
