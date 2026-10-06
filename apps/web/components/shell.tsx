@@ -92,8 +92,10 @@ export function Shell({ business, children }: { business: Business; children: Re
       {children}
       {textUs || quiet || shopDesk ? null : (
         <button className="text-us" type="button" onClick={() => setTextUs(true)}>
-          <MessageIcon />
-          Text us
+          <span className="text-us-icon" aria-hidden="true">
+            <ChatBadgeIcon />
+          </span>
+          <span className="text-us-label">Text us</span>
         </button>
       )}
       {cookies === "unknown" && !quiet && !shopDesk ? (
@@ -324,6 +326,20 @@ function MessageIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
       <path d="M2 3.5h12v7H6l-3 2.5V3.5z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function ChatBadgeIcon() {
+  return (
+    <svg className="text-us-svg" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        d="M5 5.8h14a2.2 2.2 0 0 1 2.2 2.2v7.1a2.2 2.2 0 0 1-2.2 2.2H11.1L7 20.4v-3.1H5A2.2 2.2 0 0 1 2.8 15.1V8A2.2 2.2 0 0 1 5 5.8z"
+        fill="currentColor"
+      />
+      <circle className="text-us-dot" cx="8.2" cy="11.1" r="1.15" fill="#FFE9A8" />
+      <circle className="text-us-dot delay" cx="12" cy="11.1" r="1.15" fill="#FFE9A8" />
+      <circle className="text-us-dot delay2" cx="15.8" cy="11.1" r="1.15" fill="#FFE9A8" />
     </svg>
   );
 }
