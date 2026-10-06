@@ -32,7 +32,11 @@ export async function getBusiness(): Promise<Business> {
 }
 
 export async function getCatalog() {
-  return serverGet<Category[]>("/services", 0);
+  try {
+    return await serverGet<Category[]>("/services", 0);
+  } catch {
+    return [];
+  }
 }
 
 export async function getService(slug: string) {

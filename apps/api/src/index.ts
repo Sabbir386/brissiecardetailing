@@ -1004,14 +1004,22 @@ async function ensureAdmin() {
   });
 }
 
+export default app;
+
 const port = Number(process.env.PORT || 4000);
-ensureAdmin()
-  .then(() => {
-    app.listen(port, () => {
-      console.log(`API listening on ${port}`);
+if (!process.env.VERCEL) {
+  ensureAdmin()
+    .then(() => {
+      app.listen(port, () => {
+        console.log(`API listening on ${port}`);
+      });
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
     });
-  })
-  .catch((error) => {
+} else {
+  ensureAdmin().catch((error) => {
     console.error(error);
-    process.exit(1);
   });
+}
