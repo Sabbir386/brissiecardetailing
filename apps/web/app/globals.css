@@ -20,13 +20,20 @@
 * { box-sizing: border-box; }
 html {
   scroll-behavior: smooth;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
+  max-width: 100%;
+  overflow-x: clip;
 }
 html.scroll-locked {
   scroll-behavior: auto;
   overflow: hidden;
 }
-body { margin: 0; min-height: 100vh; overflow-x: hidden; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  max-width: 100%;
+  overflow-x: clip;
+}
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -510,6 +517,7 @@ img { max-width: 100%; display: block; }
 
 .page {
   width: min(1120px, calc(100% - 40px));
+  max-width: 100%;
   margin: 0 auto;
   padding: 28px 0 80px;
 }
@@ -518,7 +526,9 @@ img { max-width: 100%; display: block; }
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 48px;
   align-items: start;
+  min-width: 0;
 }
+#main { min-width: 0; max-width: 100%; }
 
 .catalog-title {
   margin: 0 0 14px;
@@ -536,7 +546,10 @@ img { max-width: 100%; display: block; }
   background: rgba(244, 241, 235, 0.96);
   backdrop-filter: blur(14px);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
+  min-width: 0;
+  max-width: 100%;
   border-bottom: 1px solid var(--line);
 }
 .tabs::-webkit-scrollbar { display: none; }
@@ -1130,6 +1143,10 @@ img { max-width: 100%; display: block; }
   to { transform: translateY(0); opacity: 1; }
 }
 
+@media (min-width: 901px) {
+  html { scrollbar-gutter: stable; }
+}
+
 @media (min-width: 720px) {
   .text-sheet { place-items: center; }
   .text-sheet-card {
@@ -1149,6 +1166,7 @@ img { max-width: 100%; display: block; }
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 36px;
+  min-width: 0;
 }
 .detail h1 { font-family: var(--display); font-weight: 540; font-size: 42px; letter-spacing: -0.04em; margin: 0 0 8px; }
 .lede { margin: 0 0 18px; color: var(--muted); line-height: 1.55; }
@@ -2365,7 +2383,7 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 .footer-note button { background: none; border: 0; padding: 0; text-decoration: underline; color: inherit; }
 
 @media (max-width: 900px) {
-  .layout, .detail { grid-template-columns: 1fr; }
+  .layout, .detail { grid-template-columns: minmax(0, 1fr); }
   .hero-photo {
     position: relative;
     top: auto;
@@ -2404,7 +2422,8 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
   }
   .dock.open .text-us { display: none; }
   .text-us { bottom: 84px; }
-  .page { width: min(1120px, calc(100% - 28px)); padding-bottom: 110px; }
+  .page { width: min(1120px, calc(100% - 28px)); max-width: 100%; padding-bottom: 110px; }
+  .tabs { gap: 16px; }
   .page.book-page { padding-bottom: 72px; }
   .book-layout {
     grid-template-columns: 1fr;
